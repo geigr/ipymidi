@@ -36,7 +36,7 @@ def format_input(props: dict, indent=4) -> str:
     return textwrap.indent("\n".join(lines), " " * indent)
 
 
-class MidiInterface(anywidget.AnyWidget):
+class MIDIInterface(anywidget.AnyWidget):
     """Singleton class representing the (Web) MIDI interface."""
 
     _type = "webmidi"
@@ -52,12 +52,12 @@ class MidiInterface(anywidget.AnyWidget):
 
     _inputs = tt.List(InputProps, read_only=True).tag(sync=True)
 
-    _active_events: dict
+    _active_events: dict[str, "MIDIEvent"]
 
     def __new__(cls):
-        if MidiInterface._singleton is None:
-            MidiInterface._singleton = super().__new__(cls)
-        return MidiInterface._singleton
+        if MIDIInterface._singleton is None:
+            MIDIInterface._singleton = super().__new__(cls)
+        return MIDIInterface._singleton
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -77,19 +77,19 @@ class MidiInterface(anywidget.AnyWidget):
         if not self.enabled:
             raise ValueError("MIDI is not enabled!")
 
-    def _add_listener(
+    def _add_event(
         self,
         target: Any,
         event_name: str,
         event_props: list[str],
     ):
-        event_id = uuid.uuid4()
+        event_id = str(uuid.uuid4())
         target_type = target._type
         target_id = getattr(target, "id")
 
         event = MIDIEvent(event_id, target, event_name, event_props)
 
-        data = {
+        command = {
             "action": "add_listener",
             "target_type": target_type,
             "target_id": target_id,
@@ -98,12 +98,12 @@ class MidiInterface(anywidget.AnyWidget):
             "event_props": event_props,
             "event_id": event_id,
         }
-        self.send(data)
+        self.send(command)
 
         self._active_events[event_id] = event
         return event
 
-    def _remove_listener(self, event_id):
+    def _remove_event(self, event_id):
         if event_id not in self._active_events:
             raise KeyError(f"no active MIDI event of id {event_id!r} to remove")
         self.send({"action": "remove_listener", "id": event_id})
@@ -115,9 +115,9 @@ class MidiInterface(anywidget.AnyWidget):
         return Inputs()
 
 
-def get_interface() -> MidiInterface:
+def get_interface() -> MIDIInterface:
     """Return the MIDI interface object."""
-    return MidiInterface()
+    return MIDIInterface()
 
 
 class MIDIEvent(anywidget.AnyWidget):
@@ -125,16 +125,16 @@ class MIDIEvent(anywidget.AnyWidget):
 
     _esm = pathlib.Path(__file__).parent / "static" / "widget_event.js"
 
-    _event_id: uuid.UUID
+    _event_id: str
     _target: Any
     _name: str
     _prop_names: list[str]
 
-    _interface: MidiInterface
+    _interface: MIDIInterface
 
     def __init__(
         self,
-        event_id: uuid.UUID,
+        event_id: str,
         target: Any,
         name: str,
         prop_names: list[str]
@@ -177,7 +177,7 @@ class MIDIEvent(anywidget.AnyWidget):
 
         This operation cannot be reversed.
         """
-        self._interface._remove_listener(self._event_id)
+        self._interface._remove_event(self._event_id)
 
     def close(self):
         self.untrack()
@@ -187,7 +187,7 @@ class MIDIEvent(anywidget.AnyWidget):
 class Inputs(collections.abc.Sequence):
     """All available MIDI input devices."""
 
-    _interface: MidiInterface
+    _interface: MIDIInterface
     _inputs: list[dict[str, str]]
 
     def __init__(self):
@@ -238,7 +238,7 @@ class Input:
     """A MIDI input device."""
 
     _type = "input"
-    _interface: MidiInterface
+    _interface: MIDIInterface
 
     def __init__(self, idx: int, props: dict):
         self._interface = get_interface()
@@ -276,6 +276,25 @@ class Input:
     def state(self) -> Literal["connected", "disconnected"]:
         """MIDI input device port's state."""
         return self._props["state"]
+
+    def track_event(self, name: str, properties: list[str]) -> MIDIEvent:
+        """Track a MIDI event triggered from this input device.
+
+        Parameters
+        ----------
+        name : str
+            Name of the MIDI event.
+        properties: list
+            A list of the names of the event properties to track.
+
+        Returns
+        -------
+        event : MIDIEvent
+            A new widget with traits added for each of the
+            given event properties. The values of those traits will be
+            updated each time the event is triggered.
+        """
+        return self._interface._add_event(self, name, properties)
 
     def __repr__(self) -> str:
         return f"MIDI Input [{self._idx}]\n{format_input(self._props)}"

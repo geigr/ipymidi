@@ -37,5 +37,12 @@ export async function unstable_initialize({ model }: { model: AnyModel<WebMidiMo
                 model.save_changes();
             });
         }
+        else if (command.action === 'add_listener') {
+            console.log(command);
+        }
     })
 }
+
+// TODO: basic render with
+// - button for enabling the interface (+ enabled status indicator)
+// - grid buttons for connecting / disconnecting input and output devices
