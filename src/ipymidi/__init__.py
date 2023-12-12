@@ -1,11 +1,14 @@
 import collections.abc
 import importlib.metadata
 import pathlib
+import uuid
 import textwrap
-from typing import Literal
+from typing import Any, Literal
 
 import anywidget
 import traitlets as tt
+
+from ipymidi.event_traits import EVENT_TRAITS
 
 try:
     __version__ = importlib.metadata.version("ipymidi")
@@ -33,45 +36,163 @@ def format_input(props: dict, indent=4) -> str:
     return textwrap.indent("\n".join(lines), " " * indent)
 
 
-class WebMidi(anywidget.AnyWidget):
+class MidiInterface(anywidget.AnyWidget):
+    """Singleton class representing the (Web) MIDI interface."""
+
+    _type = "webmidi"
     _singleton = None
     _view_name = tt.Any(None).tag(sync=True)
-    _esm = pathlib.Path(__file__).parent / "static" / "widget.js"
-    enabled = tt.Bool(False, read_only=True).tag(sync=True)
+    _esm = pathlib.Path(__file__).parent / "static" / "widget_interface.js"
+
+    enabled = tt.Bool(
+        False,
+        read_only=True,
+        help="Indicates whether access to the host's MIDI subsystem is granted or not"
+    ).tag(sync=True)
 
     _inputs = tt.List(InputProps, read_only=True).tag(sync=True)
 
+    _active_events: dict
+
     def __new__(cls):
-        if WebMidi._singleton is None:
-            WebMidi._singleton = super().__new__(cls)
-        return WebMidi._singleton
+        if MidiInterface._singleton is None:
+            MidiInterface._singleton = super().__new__(cls)
+        return MidiInterface._singleton
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._active_events = {}
 
     def enable(self):
+        """Checks if the Web MIDI interface is available in the current
+        environment and then tries to connect to the host's MIDI subsystem.
+
+        This may show a security prompt in the Web browser asking for access to
+        the MIDI devices.
+
+        """
         self.send({"action": "enable"})
 
     def _check_enabled(self):
         if not self.enabled:
             raise ValueError("MIDI is not enabled!")
 
+    def _add_listener(
+        self,
+        target: Any,
+        event_name: str,
+        event_props: list[str],
+    ):
+        event_id = uuid.uuid4()
+        target_type = target._type
+        target_id = getattr(target, "id")
+
+        event = MIDIEvent(event_id, target, event_name, event_props)
+
+        data = {
+            "action": "add_listener",
+            "target_type": target_type,
+            "target_id": target_id,
+            "event_model_id": event.model_id,
+            "event_name": event_name,
+            "event_props": event_props,
+            "event_id": event_id,
+        }
+        self.send(data)
+
+        self._active_events[event_id] = event
+        return event
+
+    def _remove_listener(self, event_id):
+        if event_id not in self._active_events:
+            raise KeyError(f"no active MIDI event of id {event_id!r} to remove")
+        self.send({"action": "remove_listener", "id": event_id})
+
     @property
-    def inputs(self):
+    def inputs(self) -> "Inputs":
+        """Returns a sequence of MIDI input devices."""
         self._check_enabled()
         return Inputs()
 
 
-def get_midi():
-    return WebMidi()
+def get_interface() -> MidiInterface:
+    """Return the MIDI interface object."""
+    return MidiInterface()
+
+
+class MIDIEvent(anywidget.AnyWidget):
+    """A widget tracking a specific MIDI event."""
+
+    _esm = pathlib.Path(__file__).parent / "static" / "widget_event.js"
+
+    _event_id: uuid.UUID
+    _target: Any
+    _name: str
+    _prop_names: list[str]
+
+    _interface: MidiInterface
+
+    def __init__(
+        self,
+        event_id: uuid.UUID,
+        target: Any,
+        name: str,
+        prop_names: list[str]
+    ):
+        super().__init__()
+        self._event_id = event_id
+        self._target = target
+        self._name = name
+        self._prop_names = prop_names
+        self._interface = get_interface()
+
+        traits = {}
+        for pn in prop_names:
+            trait = EVENT_TRAITS[target._type][name][pn]
+            trait.read_only = True
+            traits[pn] = trait.tag(sync=True)
+
+        self.add_traits(**traits)
+
+    @property
+    def target(self) -> Any:
+        """Object that dispatched the MIDI event."""
+        return self._target
+
+    @property
+    def name(self) -> str:
+        """Name of the tracked MIDI event."""
+        return self._name
+
+    @property
+    def prop_names(self) -> list[str]:
+        """Names of the tracked MIDI event properties.
+
+        Every property is exposed as a widget trait.
+        """
+        return self._prop_names
+
+    def untrack(self):
+        """Stop tracking the MIDI event.
+
+        This operation cannot be reversed.
+        """
+        self._interface._remove_listener(self._event_id)
+
+    def close(self):
+        self.untrack()
+        super().close()
 
 
 class Inputs(collections.abc.Sequence):
     """All available MIDI input devices."""
 
-    _webmidi: WebMidi
+    _interface: MidiInterface
     _inputs: list[dict[str, str]]
 
     def __init__(self):
-        self._webmidi = get_midi()
-        self._inputs = self._webmidi._inputs
+        self._interface = get_interface()
+        self._inputs = self._interface._inputs
         self._names = None
 
     def __getitem__(self, key: int | str) -> "Input":
@@ -116,12 +237,16 @@ class Inputs(collections.abc.Sequence):
 class Input:
     """A MIDI input device."""
 
-    _webmidi: WebMidi
+    _type = "input"
+    _interface: MidiInterface
 
     def __init__(self, idx: int, props: dict):
-        self._webmidi = get_midi()
+        self._interface = get_interface()
         self._idx = idx
         self._props = props
+
+        # TODO: props may become out-of-sync when the input state changes
+        # -> figure out a way to avoid that
 
     @property
     def name(self) -> str:
