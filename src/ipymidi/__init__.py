@@ -29,6 +29,9 @@ InputProps = tt.Dict(
 )
 
 
+_ACTIVE_EVENTS: dict[str, "MIDIEvent"] = {}
+
+
 def format_input(props: dict, indent=4) -> str:
     lines = []
     for key, value in props.items():
@@ -37,7 +40,12 @@ def format_input(props: dict, indent=4) -> str:
 
 
 class MIDIInterface(anywidget.AnyWidget):
-    """Singleton class representing the (Web) MIDI interface."""
+    """Singleton class representing the (Web) MIDI interface as a widget.
+
+    Do not instantiate this class directly. Instead, access to the interface
+    is done via :py:func:`get_interface`.
+
+    """
 
     _type = "webmidi"
     _singleton = None
@@ -52,16 +60,10 @@ class MIDIInterface(anywidget.AnyWidget):
 
     _inputs = tt.List(InputProps, read_only=True).tag(sync=True)
 
-    _active_events: dict[str, "MIDIEvent"]
-
     def __new__(cls):
         if MIDIInterface._singleton is None:
             MIDIInterface._singleton = super().__new__(cls)
         return MIDIInterface._singleton
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._active_events = {}
 
     def enable(self):
         """Checks if the Web MIDI interface is available in the current
@@ -91,22 +93,25 @@ class MIDIInterface(anywidget.AnyWidget):
 
         command = {
             "action": "add_listener",
-            "target_type": target_type,
-            "target_id": target_id,
-            "event_model_id": event.model_id,
-            "event_name": event_name,
-            "event_props": event_props,
-            "event_id": event_id,
+            "args": {
+                "target_type": target_type,
+                "target_id": target_id,
+                "event_model_id": event.model_id,
+                "event_name": event_name,
+                "event_props": event_props,
+                "event_id": event_id,
+            }
         }
         self.send(command)
 
-        self._active_events[event_id] = event
+        _ACTIVE_EVENTS[event_id] = event
         return event
 
     def _remove_event(self, event_id):
-        if event_id not in self._active_events:
+        if event_id not in _ACTIVE_EVENTS:
             raise KeyError(f"no active MIDI event of id {event_id!r} to remove")
-        self.send({"action": "remove_listener", "id": event_id})
+        self.send({"action": "remove_listener", "args": {"event_id": event_id}})
+        _ACTIVE_EVENTS.pop(event_id)
 
     @property
     def inputs(self) -> "Inputs":
@@ -125,30 +130,22 @@ class MIDIEvent(anywidget.AnyWidget):
 
     _esm = pathlib.Path(__file__).parent / "static" / "widget_event.js"
 
-    _event_id: str
-    _target: Any
-    _name: str
-    _prop_names: list[str]
+    _id = tt.Unicode().tag(sync=True)
+    _target_obj: Any
+    _target_id = tt.Unicode(allow_none=True).tag(sync=True)
+    _target_type = tt.Enum(("webmidi", "input")).tag(sync=True)
+    _name = tt.Unicode().tag(sync=True)
+    _prop_names = tt.List(tt.Unicode()).tag(sync=True)
 
-    _interface: MIDIInterface
+    enabled = tt.Bool(True)
 
-    def __init__(
-        self,
-        event_id: str,
-        target: Any,
-        name: str,
-        prop_names: list[str]
-    ):
-        super().__init__()
-        self._event_id = event_id
-        self._target = target
-        self._name = name
-        self._prop_names = prop_names
-        self._interface = get_interface()
+    def __init__(self, target: Any, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._target_obj = target
 
         traits = {}
-        for pn in prop_names:
-            trait = EVENT_TRAITS[target._type][name][pn]
+        for pn in self._prop_names:
+            trait = EVENT_TRAITS[target._type][self._name][pn]
             trait.read_only = True
             traits[pn] = trait.tag(sync=True)
 
@@ -157,7 +154,7 @@ class MIDIEvent(anywidget.AnyWidget):
     @property
     def target(self) -> Any:
         """Object that dispatched the MIDI event."""
-        return self._target
+        return self._target_obj
 
     @property
     def name(self) -> str:
@@ -177,7 +174,7 @@ class MIDIEvent(anywidget.AnyWidget):
 
         This operation cannot be reversed.
         """
-        self._interface._remove_event(self._event_id)
+        get_interface()._remove_event(self._event_id)
 
     def close(self):
         self.untrack()
@@ -185,22 +182,27 @@ class MIDIEvent(anywidget.AnyWidget):
 
 
 class Inputs(collections.abc.Sequence):
-    """All available MIDI input devices."""
+    """A sequence of all available MIDI input devices.
 
-    _interface: MIDIInterface
-    _inputs: list[dict[str, str]]
+    This class is not a widget. It is a proxy to all the input devices that are
+    syncronized via :py:class:`MIDIInterface`.
 
-    def __init__(self):
-        self._interface = get_interface()
-        self._inputs = self._interface._inputs
-        self._names = None
+    """
+
+    @property
+    def _inputs(self) -> list[dict[str, str]]:
+        # prevent this object getting out-of-sync with MIDIInterface._inputs
+        # (do not copy and store any mutable state)
+        return get_interface()._inputs
 
     def __getitem__(self, key: int | str) -> "Input":
+        inputs = self._inputs
+
         idx = -1
         if isinstance(key, int):
             idx = key
         elif isinstance(key, str):
-            for i, props in enumerate(self._inputs):
+            for i, props in enumerate(inputs):
                 if key == props["id"] or key == props["name"]:
                     idx = i
                     break
@@ -211,7 +213,7 @@ class Inputs(collections.abc.Sequence):
                 "MIDI input device must be either a integer (index) or a string (id or name)"
             )
 
-        return Input(idx, self._inputs[idx])
+        return Input(idx)
 
     def __len__(self):
         return len(self._inputs)
@@ -227,26 +229,77 @@ class Inputs(collections.abc.Sequence):
         return [props["id"] for props in self._inputs]
 
     def __repr__(self) -> str:
-        lines = [f"MIDI Inputs ({len(self._inputs)})"]
-        for i, props in enumerate(self._inputs):
+        inputs = self._inputs
+        lines = [f"MIDI Inputs ({len(inputs)})"]
+        for i, props in enumerate(inputs):
             lines.append(f"{i}:")
             lines.append(format_input(props))
         return "\n".join(lines)
 
 
 class Input:
-    """A MIDI input device."""
+    """A MIDI input device.
+
+    This class is not a widget. It is a proxy to the input device that is
+    synchronized via :py:class:`MIDIInterface`.
+
+    This proxy may eventually become out-of-sync with the MIDI interface (e.g.,
+    when the corresponding input device has been unplugged), in which case the
+    properties of this object become frozen (their value won't be updated).
+
+    """
 
     _type = "input"
-    _interface: MIDIInterface
+    _idx: int
+    _props_cached: dict[str, Any]
 
-    def __init__(self, idx: int, props: dict):
-        self._interface = get_interface()
+    def __init__(self, idx: int):
         self._idx = idx
-        self._props = props
+        self._synced = True
 
-        # TODO: props may become out-of-sync when the input state changes
-        # -> figure out a way to avoid that
+        # fill cache
+        self._props_cached = {}
+        props_cached = self._props
+        self._props_cached = props_cached
+
+    @property
+    def _props(self) -> dict[str, Any]:
+        # prevent this object getting out-of-sync with MIDIInterface._inputs
+        # (do not copy and store any mutable state)
+        inputs = get_interface()._inputs
+
+        if not self._props_cached:
+            # 1st call in __init__ (synced)
+            return inputs[self._idx]
+        elif self._idx >= len(inputs):
+            # index out of range (not synced)
+            return self._props_cached
+        elif inputs[self._idx]["id"] == self._props_cached["id"]:
+            # unchanged id (synced)
+            self._props_cached = inputs[self._idx]
+            return inputs[self._idx]
+        else:
+            # changed id (not synced)
+            return self._props_cached
+
+    @property
+    def synced(self) -> bool:
+        """Return True if this object (proxy) is still synced with the MIDI interface."""
+        inputs = get_interface()._inputs
+
+        if self._idx >= len(inputs):
+            # index out of range
+            return False
+        else:
+            return inputs[self._idx]["id"] == self._props_cached["id"]
+
+    def _check_synced(self):
+        if not self.synced:
+            return ValueError(
+                "This input is out-of-sync with the MIDI interface "
+                f"(likely because the corresponding device {self.name!r}) "
+                "has been unplugged)"
+            )
 
     @property
     def name(self) -> str:
@@ -293,8 +346,21 @@ class Input:
             A new widget with traits added for each of the
             given event properties. The values of those traits will be
             updated each time the event is triggered.
+
         """
-        return self._interface._add_event(self, name, properties)
+        self._check_synced()
+
+        event_id = str(uuid.uuid4())
+
+        return MIDIEvent(
+            self,
+            _id=event_id,
+            _name=name,
+            _prop_names=properties,
+            _target_type="input",
+            _target_id=self.id,
+
+        )
 
     def __repr__(self) -> str:
         return f"MIDI Input [{self._idx}]\n{format_input(self._props)}"
