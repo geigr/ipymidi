@@ -17,6 +17,8 @@ class MIDIEvent(anywidget.AnyWidget):
     _esm = pathlib.Path(__file__).parent / "static" / "index.js"
     _anywidget_name = tt.Unicode("MIDIEvent", read_only=True).tag(sync=True)
 
+    _all_events: list["MIDIEvent"] = []
+
     _target_obj: Any
     _target_id = tt.Unicode(allow_none=True).tag(sync=True)
     _target_type = tt.Enum(("webmidi", "input")).tag(sync=True)
@@ -48,6 +50,9 @@ class MIDIEvent(anywidget.AnyWidget):
 
         self.add_traits(**traits)
 
+        # register event
+        type(self)._all_events.append(self)
+
     @property
     def target(self) -> Any:
         """Object that dispatched the MIDI event."""
@@ -65,3 +70,9 @@ class MIDIEvent(anywidget.AnyWidget):
         Every property is exposed as a widget trait.
         """
         return self._prop_names
+
+    @classmethod
+    def close_all(cls):
+        """Close all MIDIEvent widgets."""
+        for e in cls._all_events:
+            e.close()
