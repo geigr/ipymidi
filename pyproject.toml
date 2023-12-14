@@ -5,15 +5,28 @@ build-backend = "hatchling.build"
 [project]
 name = "ipymidi"
 version = "0.0.0"
+description = "Interactive MIDI in Jupyter"
+keywords = ["MIDI", "jupyter", "widget"]
+readme = "README.md"
+authors = [
+    {name = "Benoît Bovy"},
+]
+maintainers = [
+    {name = "ipymidi contributors"},
+]
+license = {text = "BSD-3-Clause"}
 dependencies = ["anywidget"]
 
 [project.optional-dependencies]
 dev = ["watchfiles", "jupyterlab"]
 
+[project.urls]
+# Home = "https://ipymidi.readthedocs.io"
+Repository = "https://github.com/benbovy/ipymidi"
+
 # automatically add the dev feature to the default env (e.g., hatch shell)
 [tool.hatch.envs.default]
 features = ["dev"]
-
 
 [tool.hatch.build]
 only-packages = true
@@ -21,10 +34,34 @@ artifacts = ["src/ipymidi/static/*"]
 
 [tool.hatch.build.hooks.jupyter-builder]
 build-function = "hatch_jupyter_builder.npm_builder"
-ensured-targets = ["src/ipymidi/static/widget.js"]
-skip-if-exists = ["src/ipymidi/static/widget.js"]
+ensured-targets = ["src/ipymidi/static/index.js"]
+skip-if-exists = ["src/ipymidi/static/index.js"]
 dependencies = ["hatch-jupyter-builder>=0.5.0"]
 
 [tool.hatch.build.hooks.jupyter-builder.build-kwargs]
 npm = "npm"
 build_cmd = "build"
+
+[tool.ruff]
+src = ["src"]
+exclude = []
+
+[tool.ruff.lint]
+
+ignore = [
+    "E402", # module level import not at top of file
+]
+select = [
+    "F",  # pyflakes
+    "E",  # pycodestyle
+    "W",
+    "I",  # isort
+    "UP", # pyupgrade
+]
+
+[tool.ruff.isort]
+known-first-party = ["ipymidi"]
+known-third-party=[
+    "anywidgets",
+    "traitlets",
+]
