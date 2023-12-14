@@ -1,6 +1,5 @@
-import { AnyModel } from "@anywidget/types"
-import { WebMidi, PortEvent } from "webmidi";
-
+import { AnyModel } from '@anywidget/types';
+import { WebMidi, PortEvent } from 'webmidi';
 
 interface InputProps {
     id: string;
@@ -12,7 +11,7 @@ interface InputProps {
 
 export interface MIDIInterfaceModel {
     enabled: boolean;
-	_inputs: InputProps[];
+    _inputs: InputProps[];
 }
 
 interface CustomMessage<T> {
@@ -21,34 +20,38 @@ interface CustomMessage<T> {
 }
 
 async function updateInputs(model: AnyModel<MIDIInterfaceModel>) {
-    let inputs = new Array<InputProps>;
+    let inputs = new Array<InputProps>();
 
-    WebMidi.inputs.forEach(device => {
+    WebMidi.inputs.forEach((device) => {
         inputs.push({
             id: device.id,
             name: device.name,
             manufacturer: device.manufacturer,
             connection: device.connection,
-            state: device.state
+            state: device.state,
         });
     });
 
-    model.set("_inputs", inputs);
+    model.set('_inputs', inputs);
 }
 
-export async function initialize_interface({ model }: { model: AnyModel<MIDIInterfaceModel> }) {
+export async function initialize_interface({
+    model,
+}: {
+    model: AnyModel<MIDIInterfaceModel>;
+}) {
     // clean-up: remove all WebMidi Listeners (should be safe as the MIDIInterface widget is a singleton)
     WebMidi.removeListener();
 
-    model.on("msg:custom", (msg: CustomMessage<any>, _buffers: any) => {
+    model.on('msg:custom', (msg: CustomMessage<any>, _buffers: any) => {
         switch (msg.command) {
             case 'enable':
-		        WebMidi.enable().then(() => {
-                    model.set("enabled", true);
+                WebMidi.enable().then(() => {
+                    model.set('enabled', true);
                     updateInputs(model);
                     model.save_changes();
 
-                    WebMidi.addListener("portschanged", (_: PortEvent) => {
+                    WebMidi.addListener('portschanged', (_: PortEvent) => {
                         updateInputs(model);
                         model.save_changes();
                     });

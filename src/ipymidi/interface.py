@@ -8,7 +8,6 @@ import traitlets as tt
 
 from ipymidi.event import MIDIEvent
 
-
 InputConnection = tt.Enum(["pending", "open", "closed"])
 InputState = tt.Enum(["connected", "disconnected"])
 InputProps = tt.Dict(
@@ -29,6 +28,7 @@ class MIDIInterface(anywidget.AnyWidget):
     is done via :py:func:`get_interface`.
 
     """
+
     _singleton = None
     _view_name = tt.Any(None).tag(sync=True)
     _esm = pathlib.Path(__file__).parent / "static" / "index.js"
@@ -37,7 +37,7 @@ class MIDIInterface(anywidget.AnyWidget):
     enabled = tt.Bool(
         False,
         read_only=True,
-        help="Indicates whether access to the host's MIDI subsystem is granted or not"
+        help="Indicates whether access to the host's MIDI subsystem is granted or not",
     ).tag(sync=True)
 
     _inputs = tt.List(InputProps, read_only=True).tag(sync=True)
@@ -255,7 +255,6 @@ class Input:
             _prop_names=list(properties),
             _target_type="input",
             _target_id=self.id,
-
         )
 
     def __repr__(self) -> str:

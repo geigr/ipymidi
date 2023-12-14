@@ -14,6 +14,7 @@ class MIDIEvent(anywidget.AnyWidget):
     via :py:meth:`Input.track_event`.
 
     """
+
     _esm = pathlib.Path(__file__).parent / "static" / "index.js"
     _anywidget_name = tt.Unicode("MIDIEvent", read_only=True).tag(sync=True)
 

@@ -5,7 +5,6 @@
 import { PromiseDelegate } from '@lumino/coreutils';
 import { WebMidi } from 'webmidi';
 
-
 export default async function enableMIDI() {
     if (WebMidi.enabled) {
         return;
@@ -13,12 +12,11 @@ export default async function enableMIDI() {
 
     const midiEnabled = new PromiseDelegate<void>();
 
-    WebMidi
-        .enable()
+    WebMidi.enable()
         .then(() => {
             midiEnabled.resolve(undefined);
         })
-        .catch(err => midiEnabled.reject(err));
+        .catch((err) => midiEnabled.reject(err));
 
     await midiEnabled.promise;
 }

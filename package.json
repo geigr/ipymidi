@@ -1,16 +1,16 @@
 {
-	"scripts": {
-		"dev": "npm run build -- --sourcemap=inline --watch",
-		"build": "esbuild js/index.ts --minify --format=esm --bundle --outdir=src/ipymidi/static",
-		"typecheck": "tsc --noEmit"
-	},
-	"dependencies": {
-		"webmidi": "^3.1.7"
-	},
-	"devDependencies": {
-		"@anywidget/types": "^0.1.4",
-		"@jupyter-widgets/base": "^6.0.6",
-		"esbuild": "^0.19.9",
-		"typescript": "^5.2.2"
-	}
+    "scripts": {
+        "dev": "npm run build -- --sourcemap=inline --watch",
+        "build": "esbuild js/index.ts --minify --format=esm --bundle --outdir=src/ipymidi/static",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "webmidi": "^3.1.7"
+    },
+    "devDependencies": {
+        "@anywidget/types": "^0.1.4",
+        "@jupyter-widgets/base": "^6.0.6",
+        "esbuild": "^0.19.9",
+        "typescript": "^5.2.2"
+    }
 }
