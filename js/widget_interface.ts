@@ -58,6 +58,12 @@ export async function initialize_interface({ model }: { model: AnyModel<MIDIInte
                 throw new Error('Unknown command ${msg.command}');
         }
     });
+
+    // TODO: use model.once when it is exposed in AnyWidget's interface
+    // https://github.com/manzt/anywidget/issues/402
+    model.on('destroy', () => {
+        WebMidi.removeListener();
+    });
 }
 
 // TODO: basic render with

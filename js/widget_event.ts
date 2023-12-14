@@ -10,7 +10,6 @@ function toCamelCase(str: string): string {
 type ObjectHash = Record<string, any>;
 
 export interface MIDIEventModel extends ObjectHash {
-    _id: string;
     _target_id: string | null;
     _target_type: 'webmidi' | 'input';
     _name: string;
