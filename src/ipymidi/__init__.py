@@ -3,7 +3,7 @@ import importlib.metadata
 import pathlib
 import uuid
 import textwrap
-from typing import Any, Literal
+from typing import Any, Iterable, Literal
 
 import anywidget
 import traitlets as tt
@@ -29,9 +29,6 @@ InputProps = tt.Dict(
 )
 
 
-_ACTIVE_EVENTS: dict[str, "MIDIEvent"] = {}
-
-
 def format_input(props: dict, indent=4) -> str:
     lines = []
     for key, value in props.items():
@@ -47,10 +44,10 @@ class MIDIInterface(anywidget.AnyWidget):
 
     """
 
-    _type = "webmidi"
     _singleton = None
     _view_name = tt.Any(None).tag(sync=True)
-    _esm = pathlib.Path(__file__).parent / "static" / "widget_interface.js"
+    _esm = pathlib.Path(__file__).parent / "static" / "index.js"
+    _anywidget_name = tt.Unicode("MIDIInterface", read_only=True).tag(sync=True)
 
     enabled = tt.Bool(
         False,
@@ -73,45 +70,11 @@ class MIDIInterface(anywidget.AnyWidget):
         the MIDI devices.
 
         """
-        self.send({"action": "enable"})
+        self.send({"command": "enable"})
 
     def _check_enabled(self):
         if not self.enabled:
             raise ValueError("MIDI is not enabled!")
-
-    def _add_event(
-        self,
-        target: Any,
-        event_name: str,
-        event_props: list[str],
-    ):
-        event_id = str(uuid.uuid4())
-        target_type = target._type
-        target_id = getattr(target, "id")
-
-        event = MIDIEvent(event_id, target, event_name, event_props)
-
-        command = {
-            "action": "add_listener",
-            "args": {
-                "target_type": target_type,
-                "target_id": target_id,
-                "event_model_id": event.model_id,
-                "event_name": event_name,
-                "event_props": event_props,
-                "event_id": event_id,
-            }
-        }
-        self.send(command)
-
-        _ACTIVE_EVENTS[event_id] = event
-        return event
-
-    def _remove_event(self, event_id):
-        if event_id not in _ACTIVE_EVENTS:
-            raise KeyError(f"no active MIDI event of id {event_id!r} to remove")
-        self.send({"action": "remove_listener", "args": {"event_id": event_id}})
-        _ACTIVE_EVENTS.pop(event_id)
 
     @property
     def inputs(self) -> "Inputs":
@@ -126,9 +89,14 @@ def get_interface() -> MIDIInterface:
 
 
 class MIDIEvent(anywidget.AnyWidget):
-    """A widget tracking a specific MIDI event."""
+    """A widget tracking a specific MIDI event.
 
-    _esm = pathlib.Path(__file__).parent / "static" / "widget_event.js"
+    Do not instantiate this class directly. Instead, create new events
+    using :py:meth:`Input.track_event`.
+
+    """
+    _esm = pathlib.Path(__file__).parent / "static" / "index.js"
+    _anywidget_name = tt.Unicode("MIDIEvent", read_only=True).tag(sync=True)
 
     _id = tt.Unicode().tag(sync=True)
     _target_obj: Any
@@ -137,7 +105,18 @@ class MIDIEvent(anywidget.AnyWidget):
     _name = tt.Unicode().tag(sync=True)
     _prop_names = tt.List(tt.Unicode()).tag(sync=True)
 
-    enabled = tt.Bool(True)
+    enabled = tt.Bool(True).tag(sync=True)
+
+    count = tt.Int(
+        0,
+        read_only=True,
+        help="Number of times the event has been captured since the creation of this object",
+    ).tag(sync=True)
+
+    timestamp = tt.Float(
+        help="The moment when the event occurred (ms)",
+        read_only=True,
+    ).tag(sync=True)
 
     def __init__(self, target: Any, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -168,17 +147,6 @@ class MIDIEvent(anywidget.AnyWidget):
         Every property is exposed as a widget trait.
         """
         return self._prop_names
-
-    def untrack(self):
-        """Stop tracking the MIDI event.
-
-        This operation cannot be reversed.
-        """
-        get_interface()._remove_event(self._event_id)
-
-    def close(self):
-        self.untrack()
-        super().close()
 
 
 class Inputs(collections.abc.Sequence):
@@ -330,7 +298,7 @@ class Input:
         """MIDI input device port's state."""
         return self._props["state"]
 
-    def track_event(self, name: str, properties: list[str]) -> MIDIEvent:
+    def track_event(self, name: str, properties: Iterable[str]) -> MIDIEvent:
         """Track a MIDI event triggered from this input device.
 
         Parameters
@@ -356,7 +324,7 @@ class Input:
             self,
             _id=event_id,
             _name=name,
-            _prop_names=properties,
+            _prop_names=list(properties),
             _target_type="input",
             _target_id=self.id,
 

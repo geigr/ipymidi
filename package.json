@@ -1,7 +1,7 @@
 {
 	"scripts": {
 		"dev": "npm run build -- --sourcemap=inline --watch",
-		"build": "esbuild js/widget_interface.ts js/widget_event.ts --minify --format=esm --bundle --outdir=src/ipymidi/static",
+		"build": "esbuild js/index.ts --minify --format=esm --bundle --outdir=src/ipymidi/static",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
