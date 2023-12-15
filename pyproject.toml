@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ipymidi"
-version = "0.0.0"
+version = "0.0.1"
 description = "Interactive MIDI in Jupyter"
 keywords = ["MIDI", "jupyter", "widget"]
 readme = "README.md"
