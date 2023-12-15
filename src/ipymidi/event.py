@@ -103,3 +103,84 @@ class MIDIEvent(anywidget.AnyWidget):
         """Close all MIDIEvent widgets."""
         for e in cls._all_events:
             e.close()
+
+
+class EventTrackerMixin:
+    """Extends the MIDIInterface, Input, and InputChannel classes with the
+    ability to track MIDI events.
+
+    """
+
+    _target_type: Literal["interface", "input"]
+
+    @property
+    def _target_id(self) -> str | None:
+        return None
+
+    @property
+    def events(self) -> dict[str, dict[str, tt.TraitType]]:
+        """Returns a dictionary of available MIDI events and their corresponding
+        properties as trait types.
+
+        Note that some events available in WEBMIDI.js may not yet be implemented
+        in IpyMIDI.
+
+        See Also
+        --------
+        :py:meth:`MIDIInterface.track_event`
+        :py:meth:`Input.track_event`
+
+        """
+        return dict(EVENT_TRAITTYPES[self._target_type])
+
+    def track_event(
+        self,
+        name: str,
+        properties: Iterable[str] | Mapping[str, tt.TraitType] | None = None,
+    ) -> MIDIEvent:
+        """Track a MIDI event triggered from the MIDI interface or an input
+        (channel) device.
+
+        Parameters
+        ----------
+        name : str
+            Name of the MIDI event.
+        properties: sequence or dict-like, optional
+            Either a list of the names of the event properties to track
+            or a mapping of property names to :py:class:`traitlets.TraitType` objects.
+            If ``None`` (default), all available properties for the MIDI event will be
+            tracked. See the notes below for more details.
+
+        Returns
+        -------
+        event : MIDIEvent
+            A new widget with traits added for each of the
+            given event properties. The values of those traits will be
+            updated each time the event is triggered.
+
+        See Also
+        --------
+        :py:attr:`MIDIInterface.events`
+        :py:attr:`Input.track_events`
+
+        Notes
+        -----
+        The names of the event and event properties must match their names as
+        defined in WEBMIDI.js. Snake case is used by IpyMIDI while camel case is
+        used by WEBMIDI.js (IpyMIDI takes care of converting from one format to
+        the other).
+
+        It is generally safer to provide event properties as a list of names: it
+        will either work or raise an error on the Python side. Using a mapping
+        is still useful in case an event available in WEBMIDI.js is still not
+        implemented in IpyMIDI, but it might throw an error in the browser's
+        Javascript console and/or not work properly on the Python side.
+
+        """
+        return MIDIEvent(
+            name,
+            self,
+            target_type=self._target_type,
+            target_id=self._target_id,
+            properties=properties,
+        )

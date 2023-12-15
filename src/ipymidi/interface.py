@@ -1,13 +1,12 @@
 import collections.abc
 import pathlib
 import textwrap
-from typing import Any, Iterable, Literal, Mapping
+from typing import Any, Literal
 
 import anywidget
 import traitlets as tt
 
-from ipymidi.event import MIDIEvent
-from ipymidi.event_traits import EVENT_TRAITTYPES
+from ipymidi.event import EventTrackerMixin
 
 InputConnection = tt.Enum(["pending", "open", "closed"])
 InputState = tt.Enum(["connected", "disconnected"])
@@ -22,13 +21,15 @@ InputProps = tt.Dict(
 )
 
 
-class MIDIInterface(anywidget.AnyWidget):
+class MIDIInterface(anywidget.AnyWidget, EventTrackerMixin):
     """Singleton class representing the (Web) MIDI interface as a widget.
 
     Do not instantiate this class directly. Instead, access to the interface
     is done via :py:func:`get_interface`.
 
     """
+
+    _target_type = "interface"
 
     _singleton = None
     _view_name = tt.Any(None).tag(sync=True)
@@ -137,11 +138,14 @@ class Inputs(collections.abc.Sequence):
         return "\n".join(lines)
 
 
-class Input:
+class Input(EventTrackerMixin):
     """A MIDI input device.
 
     This class is not a widget. It is a proxy to the input device that is
     synchronized via :py:class:`MIDIInterface`.
+
+    Do not instantiate this class directly. Use :py:attrs:`MIDIInterface.inputs`
+    instead to access a MIDI input device.
 
     This proxy may eventually become out-of-sync with the MIDI interface (e.g.,
     when the corresponding input device has been unplugged), in which case the
@@ -149,7 +153,7 @@ class Input:
 
     """
 
-    _type = "input"
+    _target_type = "input"
     _idx: int
     _props_cached: dict[str, Any]
 
@@ -202,6 +206,11 @@ class Input:
             )
 
     @property
+    def _target_id(self) -> str:
+        self._check_synced()
+        return self.id
+
+    @property
     def name(self) -> str:
         """MIDI input device name."""
         return self._props["name"]
@@ -229,67 +238,6 @@ class Input:
     def state(self) -> Literal["connected", "disconnected"]:
         """MIDI input device port's state."""
         return self._props["state"]
-
-    @property
-    def events(self) -> dict[str, dict[str, tt.TraitType]]:
-        """Returns a dictionary of available MIDI input events and their
-        corresponding properties as trait types.
-
-        Note that some events available in WEBMIDI.js may not yet be implemented
-        in IpyMIDI.
-
-        See Also
-        --------
-        :py:class:`~Input.track_event`
-
-        """
-        return dict(EVENT_TRAITTYPES["input"])
-
-    def track_event(
-        self,
-        name: str,
-        properties: Iterable[str] | Mapping[str, tt.TraitType] | None = None,
-    ) -> MIDIEvent:
-        """Track a MIDI event triggered from this input device.
-
-        Parameters
-        ----------
-        name : str
-            Name of the MIDI event.
-        properties: sequence or dict-like, optional
-            Either a list of the names of the event properties to track
-            or a mapping of property names to :py:class:`traitlets.TraitType` objects.
-            If ``None`` (default), all available properties for the MIDI event will be
-            tracked.
-            The name of the event / properties must match the names
-            defined in WEBMIDI.js (snake case is converted to camel case in the front-end,
-            e.g., `raw_value` is converted to `rawValue`).
-            It is safer to provide a list of names as it will either work or raise an
-            error on the Python side. Providing a mapping is still useful in case an
-            event available in WEBMIDI.js is still not implemented in IpyMIDI, but it
-            might throw an error in the browser's Javascript console.
-
-        Returns
-        -------
-        event : MIDIEvent
-            A new widget with traits added for each of the
-            given event properties. The values of those traits will be
-            updated each time the event is triggered.
-
-        See Also
-        --------
-        :py:class:`~Input.events`
-
-        """
-        self._check_synced()
-
-        return MIDIEvent(
-            name,
-            self,
-            target_type="input",
-            target_id=self.id,
-            properties=properties,
-        )
 
     def __repr__(self) -> str:
         return f"MIDI Input [{self._idx}]\n{format_input(self._props)}"
