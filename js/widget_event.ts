@@ -37,7 +37,6 @@ export async function initialize_event({
             model.set(pn, (e as any)[prop_names_js[i]]);
         });
         model.set('count', model.get('count') + 1);
-        model.set('timestamp', e.timestamp);
         model.save_changes();
     };
 

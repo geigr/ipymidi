@@ -25,6 +25,7 @@ repos:
       rev: 23.11.0
       hooks:
           - id: black-jupyter
+            exclude: ^src/
 
     - repo: https://github.com/MarcoGorelli/absolufy-imports
       rev: v0.3.1

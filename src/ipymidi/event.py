@@ -1,10 +1,11 @@
 import pathlib
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, Iterable, Literal
 
 import anywidget
 import traitlets as tt
 
-from ipymidi.event_traits import EVENT_TRAITS
+from ipymidi.event_traits import EVENT_TRAITTYPES
 
 
 class MIDIEvent(anywidget.AnyWidget):
@@ -12,6 +13,15 @@ class MIDIEvent(anywidget.AnyWidget):
 
     Do not instantiate this class directly. Instead, create new instances
     via :py:meth:`Input.track_event`.
+
+    Every instance has invariant properties (``name``, ``target``,
+    ``prop_names``) as well as user-defined synchronized traits that correspond
+    to the event properties to track. Two additional traits are always defined:
+
+    - ``count`` (read-only): number of times the MIDI event has been captured
+      by the widget.
+    - ``enabled`` (read/write): can be used to temporarly disable tracking the
+      MIDI event (enabled by default).
 
     """
 
@@ -22,11 +32,11 @@ class MIDIEvent(anywidget.AnyWidget):
 
     _target_obj: Any
     _target_id = tt.Unicode(allow_none=True).tag(sync=True)
-    _target_type = tt.Enum(("webmidi", "input")).tag(sync=True)
+    _target_type = tt.Enum(("interface", "input")).tag(sync=True)
     _name = tt.Unicode().tag(sync=True)
     _prop_names = tt.List(tt.Unicode()).tag(sync=True)
 
-    enabled = tt.Bool(True).tag(sync=True)
+    enabled = tt.Bool(True, help="whether or not the MIDI event is tracked").tag(sync=True)
 
     count = tt.Int(
         0,
@@ -34,21 +44,37 @@ class MIDIEvent(anywidget.AnyWidget):
         help="Number of times the event has been captured since the creation of this object",
     ).tag(sync=True)
 
-    timestamp = tt.Float(
-        help="The moment when the event occurred (ms)",
-        read_only=True,
-    ).tag(sync=True)
+    def __init__(
+        self,
+        name: str,
+        target: Any,
+        target_type: Literal["interface", "input"],
+        target_id: str | None = None,
+        properties: Iterable[str] | Mapping[str, tt.TraitType] | None = None,
+        **kwargs,
+    ):
+        super().__init__(
+            _name=name,
+            _target_obj=target,
+            _target_id=target_id,
+            _target_type=target_type,
+            **kwargs,
+        )
 
-    def __init__(self, target: Any, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._target_obj = target
+        # add user-defined event traits
+        traits: dict[str, tt.TraitType]
+        if properties is None:
+            traits = EVENT_TRAITTYPES[target_type][name]
+        elif isinstance(properties, Mapping):
+            traits = dict(properties)
+        else:
+            traits = {k: EVENT_TRAITTYPES[target_type][name][k] for k in properties}
 
-        traits = {}
-        for pn in self._prop_names:
-            trait = EVENT_TRAITS[target._type][self._name][pn]
-            trait.read_only = True
-            traits[pn] = trait.tag(sync=True)
+        for k, v in traits.items():
+            v.read_only = True
+            traits[k] = v.tag(sync=True)
 
+        self._prop_names = list(traits)
         self.add_traits(**traits)
 
         # register event

@@ -1,12 +1,13 @@
 import collections.abc
 import pathlib
 import textwrap
-from typing import Any, Iterable, Literal
+from typing import Any, Iterable, Literal, Mapping
 
 import anywidget
 import traitlets as tt
 
 from ipymidi.event import MIDIEvent
+from ipymidi.event_traits import EVENT_TRAITTYPES
 
 InputConnection = tt.Enum(["pending", "open", "closed"])
 InputState = tt.Enum(["connected", "disconnected"])
@@ -229,15 +230,44 @@ class Input:
         """MIDI input device port's state."""
         return self._props["state"]
 
-    def track_event(self, name: str, properties: Iterable[str]) -> MIDIEvent:
+    @property
+    def events(self) -> dict[str, dict[str, tt.TraitType]]:
+        """Returns a dictionary of available MIDI input events and their
+        corresponding properties as trait types.
+
+        Note that some events available in WEBMIDI.js may not yet be implemented
+        in IpyMIDI.
+
+        See Also
+        --------
+        :py:class:`~Input.track_event`
+
+        """
+        return dict(EVENT_TRAITTYPES["input"])
+
+    def track_event(
+        self,
+        name: str,
+        properties: Iterable[str] | Mapping[str, tt.TraitType] | None = None,
+    ) -> MIDIEvent:
         """Track a MIDI event triggered from this input device.
 
         Parameters
         ----------
         name : str
             Name of the MIDI event.
-        properties: list
-            A list of the names of the event properties to track.
+        properties: sequence or dict-like, optional
+            Either a list of the names of the event properties to track
+            or a mapping of property names to :py:class:`traitlets.TraitType` objects.
+            If ``None`` (default), all available properties for the MIDI event will be
+            tracked.
+            The name of the event / properties must match the names
+            defined in WEBMIDI.js (snake case is converted to camel case in the front-end,
+            e.g., `raw_value` is converted to `rawValue`).
+            It is safer to provide a list of names as it will either work or raise an
+            error on the Python side. Providing a mapping is still useful in case an
+            event available in WEBMIDI.js is still not implemented in IpyMIDI, but it
+            might throw an error in the browser's Javascript console.
 
         Returns
         -------
@@ -246,15 +276,19 @@ class Input:
             given event properties. The values of those traits will be
             updated each time the event is triggered.
 
+        See Also
+        --------
+        :py:class:`~Input.events`
+
         """
         self._check_synced()
 
         return MIDIEvent(
+            name,
             self,
-            _name=name,
-            _prop_names=list(properties),
-            _target_type="input",
-            _target_id=self.id,
+            target_type="input",
+            target_id=self.id,
+            properties=properties,
         )
 
     def __repr__(self) -> str:
