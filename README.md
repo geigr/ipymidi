@@ -4,11 +4,11 @@
 
 _Interactive MIDI in Jupyter_
 
-IpyMIDI exposes the Web MIDI interface ([Web MIDI
-API](https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API)) to Python
-as [Jupyter widgets](https://ipywidgets.readthedocs.io) via
-[WEBMIDI.js](https://webmidijs.org/). Connect your MIDI devices (e.g., keyboards,
-controllers, etc.) and start interacting with them in Jupyter!
+IpyMIDI exposes the Web browsers' [MIDI](https://en.wikipedia.org/wiki/MIDI)
+support to Python as [Jupyter widgets](https://ipywidgets.readthedocs.io)
+via the [WEBMIDI.js](https://webmidijs.org/) Javascript library. Connect your
+MIDI devices (e.g., keyboards, controllers, etc.) and start interacting with
+them in Jupyter!
 
 **Note: this is very much work in progress (nothing much to see yet)!**
 
@@ -63,7 +63,7 @@ noteon_event = keyboard.add_listener("noteon", ["note_identifier"])
 ```
 
 Use the `noteon_event` object like any other Jupyter widget, e.g., to print in
-an output widget the MIDI note that has just been played on the input device.
+an output widget the MIDI note that has just been played by the input device.
 
 ```python
 import ipywidgets
