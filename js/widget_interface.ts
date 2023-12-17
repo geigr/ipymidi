@@ -15,7 +15,7 @@ export interface MIDIInterfaceModel {
 }
 
 interface CustomMessage<T> {
-    command: 'enable' | 'add_listener' | 'remove_listener';
+    command: 'enable';
     args?: T;
 }
 
