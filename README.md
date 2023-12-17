@@ -58,18 +58,19 @@ Track a specific MIDI event emitted from one input device (e.g., the "noteon"
 event emitted from a MIDI keyboard).
 
 ```python
-ev = midi.inputs["Arturia KeyStep 37"].track_event("noteon", ["note_identifier"])
+keyboard = midi.inputs["Arturia KeyStep 37"]
+noteon_event = keyboard.add_listener("noteon", ["note_identifier"])
 ```
 
-Use the `ev` object like any other Jupyter widget, e.g., to print in an output
-widget the MIDI note that has just been played on the input device.
+Use the `noteon_event` object like any other Jupyter widget, e.g., to print in
+an output widget the MIDI note that has just been played on the input device.
 
 ```python
 import ipywidgets
 
 output = ipywidgets.Output()
 
-@ev.observe
+@noteon_event.observe
 def print_message(change):
     output.clear_output()
     with output:

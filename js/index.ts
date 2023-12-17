@@ -1,4 +1,4 @@
-import { initialize_event } from './widget_event';
+import { initialize_listener } from './widget_event';
 import { initialize_interface } from './widget_interface';
 
 export async function unstable_initialize({ model }: { model: any }) {
@@ -8,8 +8,8 @@ export async function unstable_initialize({ model }: { model: any }) {
         case 'MIDIInterface':
             initialize_interface({ model });
             break;
-        case 'MIDIEvent':
-            initialize_event({ model });
+        case 'Listener':
+            initialize_listener({ model });
             break;
         default:
             throw new Error(`Unknown MIDI widget ${widgetName}`);

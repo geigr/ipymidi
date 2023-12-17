@@ -5,14 +5,13 @@ import enableMIDI from './enable_midi';
 
 type ObjectHash = Record<string, any>;
 
-export interface MIDIEventModel extends ObjectHash {
+export interface ListenerModel extends ObjectHash {
     _target_id: string | null;
     _target_type: 'webmidi' | 'input';
-    _name: string;
+    _event: string;
     _prop_names: string[];
-    enabled: boolean;
+    suspended: boolean;
     count: number;
-    timestamp: number;
 }
 
 type PropGetter = (e: any) => any;
@@ -42,10 +41,10 @@ function getPropGetter(name: string): PropGetter {
     return getter;
 }
 
-export async function initialize_event({
+export async function initialize_listener({
     model,
 }: {
-    model: AnyModel<MIDIEventModel>;
+    model: AnyModel<ListenerModel>;
 }) {
     await enableMIDI();
 
@@ -62,18 +61,18 @@ export async function initialize_event({
         model.save_changes();
     };
 
-    const target_type = model.get('_target_type');
+    const targetType = model.get('_target_type');
 
     let eventName: keyof InputEventMap | keyof WebMidiEventMap;
     let target: EventEmitter;
 
-    if (target_type === 'input') {
-        eventName = model.get('_name') as keyof InputEventMap;
+    if (targetType === 'input') {
+        eventName = model.get('_event') as keyof InputEventMap;
         const target_id = model.get('_target_id') as string;
         target = WebMidi.getInputById(target_id);
     } else {
-        // target_type === 'webmidi'
-        eventName = model.get('_name') as keyof WebMidiEventMap;
+        // targetType === 'webmidi'
+        eventName = model.get('_event') as keyof WebMidiEventMap;
         target = WebMidi;
     }
 
@@ -82,13 +81,13 @@ export async function initialize_event({
 
     target.addListener(eventName, callback);
 
-    model.on('change:enabled', () => {
-        if (model.get('enabled')) {
+    model.on('change:suspended', () => {
+        if (model.get('suspended')) {
+            target.removeListener(eventName, callback);
+        } else {
             if (!target.hasListener(eventName, callback)) {
                 target.addListener(eventName, callback);
             }
-        } else {
-            target.removeListener(eventName, callback);
         }
     });
 

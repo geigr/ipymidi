@@ -6,7 +6,7 @@ from typing import Any, Literal
 import anywidget
 import traitlets as tt
 
-from ipymidi.event import EventTrackerMixin
+from ipymidi.event import EventEmitterMixin
 
 InputConnection = tt.Enum(["pending", "open", "closed"])
 InputState = tt.Enum(["connected", "disconnected"])
@@ -21,7 +21,7 @@ InputProps = tt.Dict(
 )
 
 
-class MIDIInterface(anywidget.AnyWidget, EventTrackerMixin):
+class MIDIInterface(anywidget.AnyWidget, EventEmitterMixin):
     """Singleton class representing the (Web) MIDI interface as a widget.
 
     Do not instantiate this class directly. Instead, access to the interface
@@ -138,7 +138,7 @@ class Inputs(collections.abc.Sequence):
         return "\n".join(lines)
 
 
-class Input(EventTrackerMixin):
+class Input(EventEmitterMixin):
     """A MIDI input device.
 
     This class is not a widget. It is a proxy to the input device that is

@@ -1,6 +1,6 @@
 import importlib.metadata
 
-from ipymidi.event import MIDIEvent
+from ipymidi.event import Listener
 from ipymidi.interface import get_interface
 
 try:
@@ -9,4 +9,4 @@ except importlib.metadata.PackageNotFoundError:
     __version__ = "unknown"
 
 
-__all__ = ["MIDIEvent", "get_interface"]
+__all__ = ["Listener", "get_interface"]

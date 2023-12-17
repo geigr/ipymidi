@@ -8,35 +8,37 @@ import traitlets as tt
 from ipymidi.event_traits import EVENT_TRAITTYPES
 
 
-class MIDIEvent(anywidget.AnyWidget):
-    """A widget tracking a specific MIDI event.
+class Listener(anywidget.AnyWidget):
+    """A widget for listening to a specific MIDI event.
 
     Do not instantiate this class directly. Instead, create new instances
-    via :py:meth:`Input.track_event`.
+    via :py:meth:`Input.add_listener`.
 
-    Every instance has invariant properties (``name``, ``target``,
+    Every instance has invariant properties (``event``, ``target``,
     ``prop_names``) as well as user-defined synchronized traits that correspond
     to the event properties to track. Two additional traits are always defined:
 
     - ``count`` (read-only): number of times the MIDI event has been captured
       by the widget.
-    - ``enabled`` (read/write): can be used to temporarly disable tracking the
-      MIDI event (enabled by default).
+    - ``suspended`` (read/write): can be used to temporarly suspend listening to
+      the MIDI event (default: False).
 
     """
 
     _esm = pathlib.Path(__file__).parent / "static" / "index.js"
-    _anywidget_name = tt.Unicode("MIDIEvent", read_only=True).tag(sync=True)
+    _anywidget_name = tt.Unicode("Listener", read_only=True).tag(sync=True)
 
-    _all_events: list["MIDIEvent"] = []
+    _all_listeners: list["Listener"] = []
 
     _target_obj: Any
     _target_id = tt.Unicode(allow_none=True).tag(sync=True)
     _target_type = tt.Enum(("interface", "input")).tag(sync=True)
-    _name = tt.Unicode().tag(sync=True)
+    _event = tt.Unicode().tag(sync=True)
     _prop_names = tt.List(tt.Unicode()).tag(sync=True)
 
-    enabled = tt.Bool(True, help="whether or not the MIDI event is tracked").tag(sync=True)
+    suspended = tt.Bool(False, help="whether this listener is currently suspended or not").tag(
+        sync=True
+    )
 
     count = tt.Int(
         0,
@@ -46,7 +48,7 @@ class MIDIEvent(anywidget.AnyWidget):
 
     def __init__(
         self,
-        name: str,
+        event: str,
         target: Any,
         target_type: Literal["interface", "input"],
         target_id: str | None = None,
@@ -54,7 +56,7 @@ class MIDIEvent(anywidget.AnyWidget):
         **kwargs,
     ):
         super().__init__(
-            _name=name,
+            _event=event,
             _target_obj=target,
             _target_id=target_id,
             _target_type=target_type,
@@ -64,11 +66,11 @@ class MIDIEvent(anywidget.AnyWidget):
         # add user-defined event traits
         traits: dict[str, tt.TraitType]
         if properties is None:
-            traits = EVENT_TRAITTYPES[target_type][name]
+            traits = EVENT_TRAITTYPES[target_type][event]
         elif isinstance(properties, Mapping):
             traits = dict(properties)
         else:
-            traits = {k: EVENT_TRAITTYPES[target_type][name][k] for k in properties}
+            traits = {k: EVENT_TRAITTYPES[target_type][event][k] for k in properties}
 
         for k, v in traits.items():
             v.read_only = True
@@ -77,8 +79,8 @@ class MIDIEvent(anywidget.AnyWidget):
         self._prop_names = list(traits)
         self.add_traits(**traits)
 
-        # register event
-        type(self)._all_events.append(self)
+        # register listener
+        type(self)._all_listeners.append(self)
 
     @property
     def target(self) -> Any:
@@ -86,13 +88,13 @@ class MIDIEvent(anywidget.AnyWidget):
         return self._target_obj
 
     @property
-    def name(self) -> str:
-        """Name of the tracked MIDI event."""
-        return self._name
+    def event(self) -> str:
+        """Name of the listened MIDI event."""
+        return self._event
 
     @property
     def prop_names(self) -> list[str]:
-        """Names of the tracked MIDI event properties.
+        """Names of the listened MIDI event properties.
 
         Every property is exposed as a widget trait.
         """
@@ -100,14 +102,14 @@ class MIDIEvent(anywidget.AnyWidget):
 
     @classmethod
     def close_all(cls):
-        """Close all MIDIEvent widgets."""
-        for e in cls._all_events:
+        """Close all Listener widgets."""
+        for e in cls._all_listeners:
             e.close()
 
 
-class EventTrackerMixin:
+class EventEmitterMixin:
     """Extends the MIDIInterface, Input, and InputChannel classes with the
-    ability to track MIDI events.
+    ability to observe MIDI events.
 
     """
 
@@ -127,17 +129,24 @@ class EventTrackerMixin:
 
         See Also
         --------
-        :py:meth:`MIDIInterface.track_event`
-        :py:meth:`Input.track_event`
+        :py:meth:`MIDIInterface.add_listener`
+        :py:meth:`Input.add_listener`
 
         """
         return dict(EVENT_TRAITTYPES[self._target_type])
 
-    def track_event(
+    @property
+    def listeners(self) -> list[Listener]:
+        """Return a list of all active listeners attached to this object."""
+        return [
+            listener for listener in Listener._all_listeners if listener.target is self and True
+        ]
+
+    def add_listener(
         self,
         name: str,
         properties: Iterable[str] | Mapping[str, tt.TraitType] | None = None,
-    ) -> MIDIEvent:
+    ) -> Listener:
         """Track a MIDI event triggered from the MIDI interface or an input
         (channel) device.
 
@@ -153,7 +162,7 @@ class EventTrackerMixin:
 
         Returns
         -------
-        event : MIDIEvent
+        event : Listener
             A new widget with traits added for each of the
             given event properties. The values of those traits will be
             updated each time the event is triggered.
@@ -161,7 +170,7 @@ class EventTrackerMixin:
         See Also
         --------
         :py:attr:`MIDIInterface.events`
-        :py:attr:`Input.track_events`
+        :py:attr:`Input.add_listeners`
 
         Notes
         -----
@@ -177,7 +186,7 @@ class EventTrackerMixin:
         Javascript console and/or not work properly on the Python side.
 
         """
-        return MIDIEvent(
+        return Listener(
             name,
             self,
             target_type=self._target_type,
