@@ -1,4 +1,5 @@
 import pathlib
+import uuid
 from collections.abc import Mapping
 from typing import Any, Iterable, Literal
 
@@ -9,17 +10,17 @@ from ipymidi.event_traits import EVENT_TRAITTYPES
 
 
 class Listener(anywidget.AnyWidget):
-    """A widget for listening to a specific MIDI event.
+    """A widget that listens to a specific MIDI event.
 
-    Do not instantiate this class directly. Instead, create new instances
-    via :py:meth:`Input.add_listener`.
+    While a new listener can be created directly via the constructor of this
+    class, it is more convenient to create new listener instances via
+    :py:meth:`MIDIInterface.add_listener` or :py:meth:`Input.add_listener`.
 
-    Every instance has invariant properties (``event``, ``target``,
-    ``prop_names``) as well as user-defined synchronized traits that correspond
-    to the event properties to track. Two additional traits are always defined:
+    Every listener instance has invariant properties (``event``, ``target``,
+    ``prop_names``) as well as user-defined observable traits that correspond to
+    the event properties. Two additional traits are always defined:
 
-    - ``count`` (read-only): number of times the MIDI event has been captured
-      by the widget.
+    - ``count`` (read-only): number of times the MIDI event has been recorded.
     - ``suspended`` (read/write): can be used to temporarly suspend listening to
       the MIDI event (default: False).
 
@@ -28,7 +29,8 @@ class Listener(anywidget.AnyWidget):
     _esm = pathlib.Path(__file__).parent / "static" / "index.js"
     _anywidget_name = tt.Unicode("Listener", read_only=True).tag(sync=True)
 
-    _all_listeners: list["Listener"] = []
+    _id: str
+    _all_listeners: dict[str, "Listener"] = {}
 
     _target_obj: Any
     _target_id = tt.Unicode(allow_none=True).tag(sync=True)
@@ -80,7 +82,8 @@ class Listener(anywidget.AnyWidget):
         self.add_traits(**traits)
 
         # register listener
-        type(self)._all_listeners.append(self)
+        self._id = str(uuid.uuid4())
+        type(self)._all_listeners[self._id] = self
 
     @property
     def target(self) -> Any:
@@ -100,11 +103,25 @@ class Listener(anywidget.AnyWidget):
         """
         return self._prop_names
 
+    def close(self):
+        """Close the Listener widget.
+
+        It will stop listening to the MIDI event and remove
+        the listener from the list of all active listeners.
+
+        """
+        self._all_listeners.pop(self._id)
+        super().close()
+
     @classmethod
     def close_all(cls):
         """Close all Listener widgets."""
-        for e in cls._all_listeners:
+        for e in list(cls._all_listeners.values()):
             e.close()
+
+    def _repr_keys(self):
+        yield "event"
+        yield from super()._repr_keys()
 
 
 class EventEmitterMixin:
@@ -135,16 +152,38 @@ class EventEmitterMixin:
         """
         return dict(EVENT_TRAITTYPES[self._target_type])
 
-    @property
-    def listeners(self) -> list[Listener]:
-        """Return a list of all active listeners attached to this object."""
-        return [
-            listener for listener in Listener._all_listeners if listener.target is self and True
+    def get_listeners(self, event: str | None = None) -> list[Listener]:
+        """Return a list of all active listeners for the interface or this
+        (channel) input.
+
+        Parameters
+        ----------
+        event : str
+            If not ``None``, return active listeners only for this MIDI event.
+
+        Returns
+        -------
+        listeners : list
+            A list of :py:class:`Listener` objects.
+
+        """
+        # check target_type and target_id equality rather than check target
+        # object identity (since the latter is a proxy and we want all proxies
+        # to the same device return the same list)
+        listeners = [
+            listener
+            for listener in Listener._all_listeners.values()
+            if listener._target_type == self._target_type and listener._target_id == self._target_id
         ]
+
+        if event is not None:
+            listeners = [listener for listener in listeners if listener.event == event]
+
+        return listeners
 
     def add_listener(
         self,
-        name: str,
+        event: str,
         properties: Iterable[str] | Mapping[str, tt.TraitType] | None = None,
     ) -> Listener:
         """Track a MIDI event triggered from the MIDI interface or an input
@@ -152,7 +191,7 @@ class EventEmitterMixin:
 
         Parameters
         ----------
-        name : str
+        event : str
             Name of the MIDI event.
         properties: sequence or dict-like, optional
             Either a list of the names of the event properties to track
@@ -162,15 +201,14 @@ class EventEmitterMixin:
 
         Returns
         -------
-        event : Listener
-            A new widget with traits added for each of the
-            given event properties. The values of those traits will be
-            updated each time the event is triggered.
+        listener : Listener
+            A new widget with observable traits added for each of the
+            given event properties.
 
         See Also
         --------
         :py:attr:`MIDIInterface.events`
-        :py:attr:`Input.add_listeners`
+        :py:attr:`Input.events`
 
         Notes
         -----
@@ -187,7 +225,7 @@ class EventEmitterMixin:
 
         """
         return Listener(
-            name,
+            event,
             self,
             target_type=self._target_type,
             target_id=self._target_id,
