@@ -22,7 +22,7 @@ dev = ["watchfiles", "jupyterlab"]
 
 [project.urls]
 # Home = "https://ipymidi.readthedocs.io"
-Repository = "https://github.com/benbovy/ipymidi"
+Repository = "https://github.com/geigr/ipymidi"
 
 # automatically add the dev feature to the default env (e.g., hatch shell)
 [tool.hatch.envs.default]
