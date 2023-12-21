@@ -111,7 +111,7 @@ class Inputs(collections.abc.Sequence):
                 raise KeyError(f"no MIDI input device with name or id {key!r}")
         else:
             raise ValueError(
-                "MIDI input device must be either a integer (index) or a string (id or name)"
+                "MIDI input device must be either an integer (index) or a string (id or name)"
             )
 
         return Input(idx)
