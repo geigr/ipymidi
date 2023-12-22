@@ -32,7 +32,7 @@ class Listener(anywidget.AnyWidget):
     _id: str
     _all_listeners: dict[str, "Listener"] = {}
 
-    _target_obj: Any
+    _target_obj = tt.Any()
     _target_id = tt.Unicode(allow_none=True).tag(sync=True)
     _target_type = tt.Enum(("interface", "input")).tag(sync=True)
     _event = tt.Unicode().tag(sync=True)
