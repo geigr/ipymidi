@@ -1,4 +1,5 @@
 from copy import deepcopy
+from textwrap import dedent
 
 import pytest
 from pytest_mock import MockerFixture
@@ -66,6 +67,19 @@ def test_inputs_properties(inputs_patched) -> None:
     assert inputs_patched.ids == ["9999"]
 
 
+def test_inputs_repr(inputs_patched) -> None:
+    expected = """\
+    MIDI Inputs (1)
+    0:
+        id: 9999
+        name: Input Device
+        manufacturer: DIY
+        connection: open
+        state: connected
+    """
+    assert repr(inputs_patched) == dedent(expected)
+
+
 def test_input_properties(inputs_patched) -> None:
     midi = ipymidi.get_interface()
     input = inputs_patched[0]
@@ -84,7 +98,6 @@ def test_input_properties(inputs_patched) -> None:
 @pytest.mark.parametrize("device_removed", [True, False])
 def test_input_sync(inputs_patched, device_removed, monkeypatch: pytest.MonkeyPatch) -> None:
     midi = ipymidi.get_interface()
-    print(midi._inputs)
     input = inputs_patched[0]
 
     assert input.synced is True
@@ -106,3 +119,15 @@ def test_input_sync(inputs_patched, device_removed, monkeypatch: pytest.MonkeyPa
 
     assert input.id == "9999"
     assert input.state == "connected"
+
+
+def test_input_repr(inputs_patched) -> None:
+    expected = """\
+    MIDI Input [0]
+        id: 9999
+        name: Input Device
+        manufacturer: DIY
+        connection: open
+        state: connected
+    """
+    assert repr(inputs_patched[0]) == dedent(expected)

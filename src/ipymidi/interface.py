@@ -135,7 +135,7 @@ class Inputs(collections.abc.Sequence):
         for i, props in enumerate(inputs):
             lines.append(f"{i}:")
             lines.append(format_input(props))
-        return "\n".join(lines)
+        return "\n".join(lines) + "\n"
 
 
 class Input(EventEmitterMixin):
@@ -240,4 +240,4 @@ class Input(EventEmitterMixin):
         return self._props["state"]
 
     def __repr__(self) -> str:
-        return f"MIDI Input [{self._idx}]\n{format_input(self._props)}"
+        return f"MIDI Input [{self._idx}]\n{format_input(self._props)}\n"
